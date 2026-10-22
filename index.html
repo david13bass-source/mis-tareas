@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0284c7">
+    <title>TaskFlow Offline PWA</title>
+
+    <!-- Manifest PWA embebido via Data URI -->
+    <link rel="manifest" id="manifestPlaceholder">
+
+    <style>
+        /* CSS Reset & Design Tokens (Sin depender de CDN externa para 100% offline) */
+        :root {
+            --bg-primary: #f8fafc;
+            --bg-card: #ffffff;
+            --bg-card-hover: #f1f5f9;
+            --border-color: #e2e8f0;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --text-muted: #94a3b8;
+            --brand-primary: #0284c7;
+            --brand-hover: #0369a1;
+            --brand-light: #e0f2fe;
+            --brand-dark: #075985;
+            --prio-high-bg: #ffe4e6;
+            --prio-high-text: #be123c;
+            --prio-med-bg: #fef3c7;
+            --prio-med-text: #b45309;
+            --prio-low-bg: #dcfce7;
+            --prio-low-text: #15803d;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            --radius: 12px;
+        }
+
+        .dark {
+            --bg-primary: #0f172a;
+            --bg-card: #1e293b;
+            --bg-card-hover: #334155;
+            --border-color: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --brand-primary: #38bdf8;
+            --brand-hover: #0284c7;
+            --brand-light: #0c4a6e;
+            --brand-dark: #e0f2fe;
+            --prio-high-bg: #881337;
+            --prio-high-text: #fecdd3;
+            --prio-med-bg: #78350f;
+            --prio-med-text: #fef3c7;
+            --prio-low-bg: #14532d;
+            --prio-low-text: #dcfce7;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 30;
+            background-color: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 20px;
+        }
+
+        .header-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .logo-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 38 h-38;
+            height: 38px;
+            background: linear-gradient(135deg, var(--brand-primary), #6366f1);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .brand-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid transparent;
+            outline: none;
+        }
+
+        .btn-primary {
+            background-color: var(--brand-primary);
+            color: white;
+        }
+        .btn-primary:hover { background-color: var(--brand-hover); }
+
+        .btn-secondary {
+            background-color: transparent;
+            border-color: var(--border-color);
+            color: var(--text-primary);
+        }
+        .btn-secondary:hover { background-color: var(--bg-card-hover); }
+
+        .net-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .net-online { background-color: #dcfce7; color: #15803d; }
+        .net-offline { background-color: #fee2e2; color: #b91c1c; }
+        .dark .net-online { background-color: #14532d; color: #dcfce7; }
+        .dark .net-offline { background-color: #7f1d1d; color: #fecdd3; }
+
+        .main-container {
+            max-width: 1000px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .banner {
+            background: linear-gradient(135deg, #0284c7, #4f46e5);
+            color: white;
+            padding: 18px 22px;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        @media(min-width: 640px) {
+            .banner { flex-direction: row; align-items: center; justify-content: space-between; }
+        }
+
+        .banner-content h3 { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+        .banner-content p { font-size: 0.8rem; opacity: 0.9; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 14px;
+        }
+
+        .stat-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 16px;
+            box-shadow: var(--shadow);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .stat-val { font-size: 1.5rem; font-weight: 800; }
+        .stat-lbl { font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; }
+
+        .filters-panel {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 14px;
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 200px;
+            position: relative;
+        }
+
+        .input-field, select {
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            outline: none;
+        }
+
+        .input-field:focus, select:focus {
+            border-color: var(--brand-primary);
+        }
+
+        .tabs {
+            display: flex;
+            background-color: var(--bg-primary);
+            padding: 4px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .tab-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: none;
+            background: none;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        .tab-btn.active {
+            background-color: var(--bg-card);
+            color: var(--brand-primary);
+            box-shadow: var(--shadow);
+        }
+
+        .task-list { display: flex; flex-direction: column; gap: 10px; }
+
+        .task-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 14px 16px;
+            box-shadow: var(--shadow);
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .task-card.completed { opacity: 0.6; }
+        .task-card.completed .task-title { text-decoration: line-through; color: var(--text-muted); }
+
+        .checkbox {
+            width: 20px;
+            height: 20px;
+            border-radius: 6px;
+            border: 2px solid var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        .checkbox.checked {
+            background-color: #10b981;
+            border-color: #10b981;
+            color: white;
+        }
+
+        .task-info { flex: 1; min-width: 0; }
+        .task-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+        .task-title { font-size: 0.95rem; font-weight: 600; color: var(--text-primary); }
+
+        .tag {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+        }
+
+        .prio-alta { background-color: var(--prio-high-bg); color: var(--prio-high-text); }
+        .prio-media { background-color: var(--prio-med-bg); color: var(--prio-med-text); }
+        .prio-baja { background-color: var(--prio-low-bg); color: var(--prio-low-text); }
+
+        .tag-home {
+            background-color: var(--brand-light);
+            color: var(--brand-dark);
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .task-desc { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px; }
+        .task-meta { font-size: 0.75rem; color: var(--text-muted); display: flex; gap: 12px; }
+
+        .task-actions { display: flex; gap: 4px; }
+        .icon-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            padding: 6px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .icon-btn:hover { color: var(--text-primary); background-color: var(--bg-card-hover); }
+
+        /* Modal styling */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+
+        .modal {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            width: 100%;
+            max-width: 480px;
+            padding: 20px;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .modal-header { display: flex; justify-content: space-between; align-items: center; }
+        .modal-title { font-size: 1.1rem; font-weight: 700; }
+
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-group label { font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; }
+
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+        .radio-group { display: flex; gap: 8px; }
+        .radio-btn {
+            flex: 1;
+            text-align: center;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            background-color: var(--bg-primary);
+        }
+
+        .radio-btn.selected {
+            border-color: var(--brand-primary);
+            background-color: var(--brand-light);
+            color: var(--brand-dark);
+        }
+
+        /* SVG Icons */
+        .icon { width: 16px; height: 16px; stroke-width: 2; stroke: currentColor; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="header-container">
+            <div class="logo-group">
+                <div class="logo-icon">
+                    <svg class="icon" style="width: 22px; height: 22px;" viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                </div>
+                <div>
+                    <h1 class="brand-title">TaskFlow</h1>
+                </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span id="netStatus" class="net-badge net-online">
+                    <svg class="icon" viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+                    <span id="netText">En Línea</span>
+                </span>
+
+                <button id="pwaInstallBtn" class="btn btn-secondary" style="display: none;" onclick="installPWA()">
+                    <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    <span>Instalar App</span>
+                </button>
+
+                <button class="btn btn-secondary" onclick="toggleTheme()" title="Cambiar Tema">
+                    <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                </button>
+
+                <button class="btn btn-primary" onclick="openModal()">
+                    <svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    <span style="display: none;" class="sm-show">Nueva Tarea</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="main-container">
+
+        <!-- Banner de Detección de Llegada a Casa -->
+        <section class="banner">
+            <div class="banner-content">
+                <h3>🏠 Modulo "Llegué a Casa" & Automatización Offline</h3>
+                <p>Simula o activa tu llegada para recibir notificaciones locales instantáneas con las tareas asignadas para el hogar.</p>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn" style="background-color: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4);" onclick="triggerHomeArrival()">
+                    <svg class="icon" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                    <span>¡Llegué a Casa!</span>
+                </button>
+                <button class="btn" style="background-color: white; color: #0284c7;" onclick="requestNotificationPerm()">
+                    <svg class="icon" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                    <span id="notiBtnText">Activar Avisos</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Stats Grid -->
+        <section class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-val" id="stTotal">0</div>
+                <div>
+                    <div class="stat-lbl">TOTAL TAREAS</div>
+                    <div style="font-size:0.7rem; color:var(--text-muted);" id="stSub">0 completadas</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val" style="color: #eab308;" id="stPending">0</div>
+                <div>
+                    <div class="stat-lbl">PENDIENTES</div>
+                    <div style="font-size:0.7rem; color:var(--text-muted);">Por realizar</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-val" style="color: #0284c7;" id="stHome">0</div>
+                <div>
+                    <div class="stat-lbl">EN CASA</div>
+                    <div style="font-size:0.7rem; color:var(--text-muted);">Para cuando llegues</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Filters & Search -->
+        <section class="filters-panel">
+            <div class="filter-row">
+                <div class="search-box">
+                    <input type="text" id="searchInput" class="input-field" placeholder="Buscar tareas..." oninput="renderTasks()">
+                </div>
+                <div class="tabs">
+                    <button class="tab-btn active" id="tabAll" onclick="setFilter('status', 'all')">Todas</button>
+                    <button class="tab-btn" id="tabPending" onclick="setFilter('status', 'pending')">Pendientes</button>
+                    <button class="tab-btn" id="tabCompleted" onclick="setFilter('status', 'completed')">Completadas</button>
+                </div>
+            </div>
+            <div class="filter-row">
+                <div style="display: flex; gap: 10px; width: 100%; flex-wrap: wrap;">
+                    <select id="catFilter" style="flex:1;" onchange="renderTasks()">
+                        <option value="all">Todas las Categorías</option>
+                        <option value="Hogar">Hogar</option>
+                        <option value="Trabajo">Trabajo</option>
+                        <option value="Personal">Personal</option>
+                    </select>
+                    <select id="locFilter" style="flex:1;" onchange="renderTasks()">
+                        <option value="all">Cualquier Ubicación</option>
+                        <option value="home">Solo "En Casa"</option>
+                    </select>
+                    <select id="sortSelect" style="flex:1;" onchange="renderTasks()">
+                        <option value="created">Más Recientes</option>
+                        <option value="prio">Mayor Prioridad</option>
+                        <option value="date">Fecha de Vencimiento</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tasks Container -->
+        <section class="task-list" id="taskList">
+            <!-- Dynamic Tasks -->
+        </section>
+
+    </main>
+
+    <!-- Task Modal Form -->
+    <div class="modal-overlay" id="taskModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalHeaderTitle">Nueva Tarea</h3>
+                <button class="icon-btn" onclick="closeModal()">
+                    <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+
+            <form id="taskForm" onsubmit="saveTask(event)" style="display:flex; flex-direction:column; gap:12px;">
+                <input type="hidden" id="taskId">
+
+                <div class="form-group">
+                    <label>Título de la tarea *</label>
+                    <input type="text" id="taskTitle" required class="input-field" placeholder="Ej: Comprar alimentos">
+                </div>
+
+                <div class="form-group">
+                    <label>Descripción</label>
+                    <textarea id="taskDesc" rows="2" class="input-field" placeholder="Notas adicionales..."></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Categoría</label>
+                        <select id="taskCategory">
+                            <option value="Hogar">Hogar</option>
+                            <option value="Trabajo">Trabajo</option>
+                            <option value="Personal">Personal</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Vencimiento</label>
+                        <input type="date" id="taskDueDate" class="input-field">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Prioridad</label>
+                    <div class="radio-group">
+                        <div class="radio-btn" id="prioLow" onclick="selectPrio('Baja')">Baja</div>
+                        <div class="radio-btn selected" id="prioMed" onclick="selectPrio('Media')">Media</div>
+                        <div class="radio-btn" id="prioHigh" onclick="selectPrio('Alta')">Alta</div>
+                    </div>
+                </div>
+
+                <div class="form-group" style="flex-direction: row; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="taskIsHome" style="width: 18px; height: 18px; cursor: pointer;">
+                    <label for="taskIsHome" style="cursor: pointer; font-size: 0.85rem; text-transform: none;">Marcar para realizar <strong>"En Casa"</strong> 🏠</label>
+                </div>
+
+                <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar Tarea</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // State & Data
+        let tasks = JSON.parse(localStorage.getItem('taskflow_pwa_tasks')) || [
+            { id: '1', title: 'Regar las plantas del balcón', desc: 'Usar el agua almacenada.', category: 'Hogar', priority: 'Media', isHome: true, completed: false, createdAt: new Date().toISOString() },
+            { id: '2', title: 'Revisar pendientes del trabajo', desc: 'Mandar correo de resumen.', category: 'Trabajo', priority: 'Alta', isHome: false, completed: false, createdAt: new Date().toISOString() }
+        ];
+
+        let currentStatusFilter = 'all';
+        let selectedPriority = 'Media';
+        let deferredPrompt = null;
+
+        // PWA Manifest setup via Data URI
+        const manifestObj = {
+            name: "TaskFlow Offline PWA",
+            short_name: "TaskFlow",
+            start_url: "./",
+            display: "standalone",
+            background_color: "#0f172a",
+            theme_color: "#0284c7",
+            icons: [
+                {
+                    src: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' fill='%230284c7'><rect width='512' height='512' rx='100'/><path d='M150 260 l80 80 l150 -150' stroke='white' stroke-width='40' fill='none'/></svg>",
+                    sizes: "512x512",
+                    type: "image/svg+xml"
+                }
+            ]
+        };
+        document.getElementById('manifestPlaceholder').href = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifestObj));
+
+        // Initialization
+        window.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            initNetworkStatus();
+            registerServiceWorker();
+            renderTasks();
+            checkAutoHomeArrival();
+        });
+
+        // Theme Toggle
+        function initTheme() {
+            if (localStorage.getItem('taskflow_theme') === 'dark' || (!localStorage.getItem('taskflow_theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            }
+        }
+
+        function toggleTheme() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('taskflow_theme', isDark ? 'dark' : 'light');
+        }
+
+        // Online/Offline Network Status Indicator
+        function initNetworkStatus() {
+            function updateStatus() {
+                const badge = document.getElementById('netStatus');
+                const text = document.getElementById('netText');
+                if (navigator.onLine) {
+                    badge.className = 'net-badge net-online';
+                    text.innerText = 'En Línea';
+                } else {
+                    badge.className = 'net-badge net-offline';
+                    text.innerText = 'Sin Conexión (Offline)';
+                }
+            }
+
+            window.addEventListener('online', () => {
+                updateStatus();
+                triggerHomeArrival("Reconexión a Red Detectada");
+            });
+            window.addEventListener('offline', updateStatus);
+            updateStatus();
+        }
+
+        // PWA Installation Handling
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            document.getElementById('pwaInstallBtn').style.display = 'inline-flex';
+        });
+
+        function installPWA() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(() => {
+                    deferredPrompt = null;
+                    document.getElementById('pwaInstallBtn').style.display = 'none';
+                });
+            }
+        }
+
+        // Embedded Service Worker Registration via Blob
+        function registerServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                const swCode = `
+                    const CACHE_NAME = 'taskflow-v1';
+                    self.addEventListener('install', (e) => {
+                        e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(['./'])));
+                    });
+                    self.addEventListener('fetch', (e) => {
+                        e.respondWith(caches.match(e.request).then(res => res || fetch(e.request)));
+                    });
+                `;
+                const blob = new Blob([swCode], { type: 'application/javascript' });
+                const blobUrl = URL.createObjectURL(blob);
+
+                navigator.serviceWorker.register(blobUrl)
+                    .then(() => console.log('Service Worker Offline activo'))
+                    .catch(err => console.log('SW error:', err));
+            }
+        }
+
+        // Notification API System
+        function requestNotificationPerm() {
+            if (!("Notification" in window)) {
+                alert("Este navegador no soporta notificaciones.");
+                return;
+            }
+            Notification.requestPermission().then(perm => {
+                const btnText = document.getElementById('notiBtnText');
+                if (perm === 'granted') {
+                    btnText.innerText = "Avisos Activos";
+                    sendLocalNotification("TaskFlow", "¡Notificaciones activadas correctamente!");
+                } else {
+                    btnText.innerText = "Avisos Denegados";
+                }
+            });
+        }
+
+        function sendLocalNotification(title, body) {
+            if ("Notification" in window && Notification.permission === "granted") {
+                new Notification(title, { body: body });
+            } else {
+                console.log(`[Notificación Local] ${title}: ${body}`);
+            }
+        }
+
+        // Home Arrival Detection Simulation
+        function triggerHomeArrival(reason = "Llegada a Casa") {
+            const homePending = tasks.filter(t => !t.completed && t.isHome);
+            
+            if (homePending.length > 0) {
+                const titles = homePending.map(t => `• ${t.title}`).join('\n');
+                sendLocalNotification(`🏠 ${reason} (${homePending.length} pendientes)`, `Tienes tareas para realizar en casa:\n${titles}`);
+                alert(`🏠 ¡Notificación de Llegada a Casa!\n\nTienes ${homePending.length} tarea(s) pendientes para hacer en casa:\n\n` + titles);
+            } else {
+                sendLocalNotification(`🏠 ${reason}`, "¡No tienes tareas pendientes marcadas para realizar en casa!");
+                alert("🏠 ¡Bienvenido! No tienes tareas pendientes marcadas para realizar en casa.");
+            }
+        }
+
+        function checkAutoHomeArrival() {
+            if (navigator.connection) {
+                navigator.connection.addEventListener('change', () => {
+                    triggerHomeArrival("Cambio de Red Detectado");
+                });
+            }
+        }
+
+        // Tasks Operations
+        function saveTasksToStorage() {
+            localStorage.setItem('taskflow_pwa_tasks', JSON.stringify(tasks));
+        }
+
+        function toggleTask(id) {
+            const task = tasks.find(t => t.id === id);
+            if (task) {
+                task.completed = !task.completed;
+                saveTasksToStorage();
+                renderTasks();
+            }
+        }
+
+        function deleteTask(id) {
+            tasks = tasks.filter(t => t.id !== id);
+            saveTasksToStorage();
+            renderTasks();
+        }
+
+        function setFilter(type, val) {
+            if (type === 'status') {
+                currentStatusFilter = val;
+                document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+                if (val === 'all') document.getElementById('tabAll').classList.add('active');
+                if (val === 'pending') document.getElementById('tabPending').classList.add('active');
+                if (val === 'completed') document.getElementById('tabCompleted').classList.add('active');
+            }
+            renderTasks();
+        }
+
+        function selectPrio(prio) {
+            selectedPriority = prio;
+            document.querySelectorAll('.radio-btn').forEach(b => b.classList.remove('selected'));
+            if (prio === 'Baja') document.getElementById('prioLow').classList.add('selected');
+            if (prio === 'Media') document.getElementById('prioMed').classList.add('selected');
+            if (prio === 'Alta') document.getElementById('prioHigh').classList.add('selected');
+        }
+
+        function openModal(id = null) {
+            const form = document.getElementById('taskForm');
+            form.reset();
+            document.getElementById('taskId').value = '';
+            selectPrio('Media');
+
+            if (id) {
+                const t = tasks.find(x => x.id === id);
+                if (t) {
+                    document.getElementById('taskId').value = t.id;
+                    document.getElementById('taskTitle').value = t.title;
+                    document.getElementById('taskDesc').value = t.desc || '';
+                    document.getElementById('taskCategory').value = t.category;
+                    document.getElementById('taskDueDate').value = t.dueDate || '';
+                    document.getElementById('taskIsHome').checked = t.isHome;
+                    selectPrio(t.priority);
+                    document.getElementById('modalHeaderTitle').innerText = 'Editar Tarea';
+                }
+            } else {
+                document.getElementById('modalHeaderTitle').innerText = 'Nueva Tarea';
+            }
+
+            document.getElementById('taskModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('taskModal').classList.remove('active');
+        }
+
+        function saveTask(e) {
+            e.preventDefault();
+            const id = document.getElementById('taskId').value;
+            const title = document.getElementById('taskTitle').value.trim();
+            const desc = document.getElementById('taskDesc').value.trim();
+            const category = document.getElementById('taskCategory').value;
+            const dueDate = document.getElementById('taskDueDate').value;
+            const isHome = document.getElementById('taskIsHome').checked;
+
+            if (!title) return;
+
+            if (id) {
+                const idx = tasks.findIndex(t => t.id === id);
+                if (idx !== -1) {
+                    tasks[idx] = { ...tasks[idx], title, desc, category, dueDate, isHome, priority: selectedPriority };
+                }
+            } else {
+                tasks.unshift({
+                    id: Date.now().toString(),
+                    title,
+                    desc,
+                    category,
+                    dueDate,
+                    isHome,
+                    priority: selectedPriority,
+                    completed: false,
+                    createdAt: new Date().toISOString()
+                });
+            }
+
+            saveTasksToStorage();
+            closeModal();
+            renderTasks();
+        }
+
+        // Render UI
+        function renderTasks() {
+            const container = document.getElementById('taskList');
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const cat = document.getElementById('catFilter').value;
+            const loc = document.getElementById('locFilter').value;
+            const sort = document.getElementById('sortSelect').value;
+
+            // Update stats
+            const total = tasks.length;
+            const completed = tasks.filter(t => t.completed).length;
+            const pending = total - completed;
+            const homeTasks = tasks.filter(t => !t.completed && t.isHome).length;
+
+            document.getElementById('stTotal').innerText = total;
+            document.getElementById('stSub').innerText = `${completed} completadas`;
+            document.getElementById('stPending').innerText = pending;
+            document.getElementById('stHome').innerText = homeTasks;
+
+            // Filter logic
+            let filtered = tasks.filter(t => {
+                const matchSearch = t.title.toLowerCase().includes(search) || (t.desc && t.desc.toLowerCase().includes(search));
+                const matchStatus = currentStatusFilter === 'all' ? true : (currentStatusFilter === 'completed' ? t.completed : !t.completed);
+                const matchCat = cat === 'all' ? true : t.category === cat;
+                const matchLoc = loc === 'all' ? true : (loc === 'home' ? t.isHome : true);
+                return matchSearch && matchStatus && matchCat && matchLoc;
+            });
+
+            // Sort logic
+            filtered.sort((a, b) => {
+                if (sort === 'prio') {
+                    const w = { 'Alta': 3, 'Media': 2, 'Baja': 1 };
+                    return w[b.priority] - w[a.priority];
+                } else if (sort === 'date') {
+                    if (!a.dueDate) return 1;
+                    if (!b.dueDate) return -1;
+                    return new Date(a.dueDate) - new Date(b.dueDate);
+                } else {
+                    return new Date(b.createdAt) - new Date(a.createdAt);
+                }
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: var(--text-muted); background: var(--bg-card); border-radius: var(--radius); border: 1px dashed var(--border-color);">
+                        <p style="font-weight: 600;">No hay tareas que coincidan con los filtros</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filtered.map(t => `
+                <div class="task-card ${t.completed ? 'completed' : ''}">
+                    <div class="checkbox ${t.completed ? 'checked' : ''}" onclick="toggleTask('${t.id}')">
+                        ${t.completed ? '<svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
+                    </div>
+                    <div class="task-info">
+                        <div class="task-header">
+                            <span class="task-title">${escapeHtml(t.title)}</span>
+                            <span class="tag prio-${t.priority.toLowerCase()}">${t.priority}</span>
+                            ${t.isHome ? '<span class="tag-home">🏠 En Casa</span>' : ''}
+                        </div>
+                        ${t.desc ? `<div class="task-desc">${escapeHtml(t.desc)}</div>` : ''}
+                        <div class="task-meta">
+                            <span>📁 ${t.category}</span>
+                            ${t.dueDate ? `<span>📅 Vence: ${t.dueDate}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="task-actions">
+                        <button class="icon-btn" onclick="openModal('${t.id}')">
+                            <svg class="icon" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                        </button>
+                        <button class="icon-btn" onclick="deleteTask('${t.id}')">
+                            <svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.innerText = str;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
